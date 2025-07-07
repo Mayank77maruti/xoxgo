@@ -152,7 +152,11 @@ export default function ChatPage() {
     try {
       const res = await fetch(`/api/place-details?place=${encodeURIComponent(place.name)}&city=${encodeURIComponent(place.address || '')}`);
       const data = await res.json();
-      setModalDetails(data);
+      setModalDetails({
+        ...data,
+        images: Array.isArray(data.images) ? data.images : [],
+        reviews: Array.isArray(data.reviews) ? data.reviews : [],
+      });
     } catch {
       setModalDetails({ reviews: [], images: [] });
     } finally {

@@ -88,9 +88,27 @@ Respond ONLY with a valid JSON array, no extra text, no markdown, no code fences
     return NextResponse.json({ error: 'Failed to parse or repair places from AI response', raw: response }, { status: 500 });
   }
 
-  if (!places.length) {
+  if (!Array.isArray(places) || places.length === 0) {
     return NextResponse.json({ error: 'No places found in AI response', raw: response }, { status: 500 });
   }
+
+  // Normalize and filter places to handle AI quirks and missing fields
+  function normalizePlace(p: any) {
+    // Fix common AI mistakes
+    if (!p.name && p['.name']) p.name = p['.name'];
+    // Add more typo corrections as needed
+    return {
+      name: p.name || 'Unknown Place',
+      description: p.description || '',
+      rating: typeof p.rating === 'number' ? p.rating : 3,
+      image: p.image || '',
+      cost: p.cost || '$',
+      info: p.info || '',
+      lat: typeof p.lat === 'number' ? p.lat : null,
+      lon: typeof p.lon === 'number' ? p.lon : null,
+    };
+  }
+  places = Array.isArray(places) ? places.map(normalizePlace).filter(p => p.name && p.description) : [];
 
   // Enrich each place with SERP API and geocode, fallback to AI-provided lat/lon if available
   const enriched = await Promise.all(places.map(async (p: any) => {
