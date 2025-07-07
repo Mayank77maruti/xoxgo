@@ -31,6 +31,9 @@ export default function LlamaPage() {
   const [error, setError] = useState('');
   const [geoLocations, setGeoLocations] = useState<{ lat: number; lon: number; name: string; image?: string }[]>([]);
   const [mounted, setMounted] = useState(false);
+  const [modal, setModal] = useState<{ place: string; city: string } | null>(null);
+  const [placeDetails, setPlaceDetails] = useState<{ reviews: string[]; images: string[] } | null>(null);
+  const [loadingDetails, setLoadingDetails] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -91,6 +94,21 @@ export default function LlamaPage() {
     return `${base}?size=600x300&${markers}&key=${apiKey}`;
   }
 
+  async function openPlaceDetails(place: string, city: string) {
+    setModal({ place, city });
+    setLoadingDetails(true);
+    setPlaceDetails(null);
+    try {
+      const res = await fetch(`/api/place-details?place=${encodeURIComponent(place)}&city=${encodeURIComponent(city)}`);
+      const data = await res.json();
+      setPlaceDetails(data);
+    } catch {
+      setPlaceDetails({ reviews: [], images: [] });
+    } finally {
+      setLoadingDetails(false);
+    }
+  }
+
   return (
     <div style={{ maxWidth: 600, margin: '2rem auto', padding: 24, border: '1px solid #eee', borderRadius: 8 }}>
       <h1>LLaMA AI Travel Itinerary</h1>
@@ -123,7 +141,7 @@ export default function LlamaPage() {
               <h3 style={{ marginBottom: 12 }}>Day {day.day}</h3>
               <ol style={{ paddingLeft: 20 }}>
                 {day.activities.map((act: any, j: number) => (
-                  <li key={j} style={{ marginBottom: 16 }}>
+                  <li key={j} style={{ marginBottom: 16, cursor: 'pointer' }} onClick={() => openPlaceDetails(act.location, city)}>
                     <div><strong>Location:</strong> {act.location}</div>
                     <div><strong>Best Time to Visit:</strong> {act.best_time_to_visit}</div>
                     <div><strong>Highlights:</strong> {act.highlights}</div>
@@ -151,6 +169,41 @@ export default function LlamaPage() {
       ) : !error && (
         <div style={{ marginTop: 24, color: 'red' }}>
           No itinerary details available. Please try again with a different city or check your API setup.
+        </div>
+      )}
+      {modal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.4)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setModal(null)}>
+          <div style={{ background: '#fff', padding: 24, borderRadius: 8, minWidth: 320, maxWidth: 500, maxHeight: '80vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+            <h3>Details for {modal.place}</h3>
+            {loadingDetails ? <div>Loading...</div> : (
+              <>
+                {placeDetails && placeDetails.images.length > 0 && (
+                  <div style={{ marginBottom: 16 }}>
+                    <strong>Images:</strong>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
+                      {placeDetails.images.map((img, idx) => (
+                        <img key={idx} src={img} alt={modal.place} style={{ width: 100, borderRadius: 4 }} />
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {placeDetails && placeDetails.reviews.length > 0 && (
+                  <div>
+                    <strong>Recent Reviews:</strong>
+                    <ul>
+                      {placeDetails.reviews.map((rev, idx) => (
+                        <li key={idx}>{rev}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {placeDetails && placeDetails.images.length === 0 && placeDetails.reviews.length === 0 && (
+                  <div>No details found for this place.</div>
+                )}
+              </>
+            )}
+            <button style={{ marginTop: 16 }} onClick={() => setModal(null)}>Close</button>
+          </div>
         </div>
       )}
     </div>

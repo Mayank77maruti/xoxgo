@@ -2,9 +2,9 @@ import { Groq } from 'groq-sdk';
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
-export async function getItinerary({ city, budget, interests }: { city: string; budget: string; interests: string[] }) {
-  const prompt = `
-You are an AI travel agent. Suggest a personalized itinerary for a trip to ${city} with a budget of ${budget} and interests: ${interests.join(', ')}.
+export async function getItinerary({ city, budget, interests, rawPrompt }: { city?: string; budget?: string; interests?: string[]; rawPrompt?: string }) {
+  const prompt = rawPrompt || `
+You are an AI travel agent. Suggest a personalized itinerary for a trip to ${city} with a budget of ${budget} and interests: ${(interests || []).join(', ')}.
 For each activity, return a structured JSON with:
 - location (string)
 - best_time_to_visit (string)

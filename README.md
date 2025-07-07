@@ -19,7 +19,7 @@
    - Paste contents of `lib/neo4jSchema.cypher` and run
 5. Run the app:
    ```
-   npm run dev
+npm run dev
    ```
 
 ## API

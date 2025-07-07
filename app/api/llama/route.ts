@@ -3,8 +3,25 @@ import { getItinerary } from '../../../lib/groqAgent';
 import { driver } from '../../../lib/neo4j';
 import { getPlaceInfo } from '../../../lib/serp';
 
-// Helper to geocode a location using Nominatim
-async function geocodeLocation(location: string, city: string) {
+const TAVILY_API_KEY = process.env.TAVILY_API_KEY;
+
+async function geocodeWithTavily(location: string, city: string) {
+  const res = await fetch('https://api.tavily.com/v1/geocode', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${TAVILY_API_KEY}`,
+    },
+    body: JSON.stringify({ query: `${location}, ${city}` }),
+  });
+  const data = await res.json();
+  if (data && data.lat && data.lon) {
+    return { lat: data.lat, lon: data.lon };
+  }
+  return null;
+}
+
+async function geocodeWithNominatim(location: string, city: string) {
   const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(location + ', ' + city)}`);
   const data = await res.json();
   if (data && data[0]) {
@@ -40,25 +57,44 @@ export async function POST(req: NextRequest) {
   if (!parsed) {
     return NextResponse.json({ error: 'Could not parse itinerary details from AI response.' }, { status: 500 });
   }
-  // Enrich each activity with SERP API data and geocoding
+  // Enrich each activity with SERP API data and Tavily geocoding
   if (parsed && parsed.itinerary) {
     for (const day of parsed.itinerary) {
       for (const act of day.activities) {
+        // 1. Use Tavily for address/location info
+        try {
+          const tavilyRes = await fetch('https://api.tavily.com/v1/place-details', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${TAVILY_API_KEY}`,
+            },
+            body: JSON.stringify({ query: `${act.location}, ${city}` }),
+          });
+          const tavilyData = await tavilyRes.json();
+          if (tavilyData.address) act.address = tavilyData.address;
+          if (tavilyData.location) act.location_info = tavilyData.location;
+        } catch (err) {
+          console.error('Tavily address error:', err);
+        }
+        // 2. Use Nominatim for lat/lng
+        try {
+          const geo = await geocodeWithNominatim(act.location, city);
+          if (geo) {
+            act.lat = geo.lat;
+            act.lon = geo.lon;
+          }
+        } catch (err) {
+          console.error('Nominatim geocoding error:', err);
+        }
+        // 3. (Optional) Still use Tavily for reviews/images on demand from frontend
+        // 4. (Optional) Attach SERP info as before
         try {
           const serp = await getPlaceInfo(act.location, city);
           if (serp) {
             act.rating = serp.rating;
             act.image = serp.image;
-            act.address = serp.address;
             act.link = serp.link;
-          }
-        } catch {}
-        // Geocode location
-        try {
-          const geo = await geocodeLocation(act.location, city);
-          if (geo) {
-            act.lat = geo.lat;
-            act.lon = geo.lon;
           }
         } catch {}
       }
